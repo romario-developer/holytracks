@@ -1,0 +1,7 @@
+node_modules/
+packages/
+apps/*/dist/
+apps/*/.turbo/
+.env
+*.sqlite
+apps/api/dev.db

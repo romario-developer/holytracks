@@ -1,0 +1,119 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/client"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String            @id @default(cuid())
+  email        String            @unique
+  passwordHash String
+  name         String
+  createdAt    DateTime          @default(now())
+
+  ministries   Ministry[]        @relation("MinistryOwner")
+  memberships  MinistryMember[]
+  setlists     Setlist[]         @relation("SetlistCreator")
+  events       EventLog[]
+}
+
+model Ministry {
+  id          String            @id @default(cuid())
+  name        String
+  ownerUserId String
+  createdAt   DateTime          @default(now())
+
+  owner       User              @relation("MinistryOwner", fields: [ownerUserId], references: [id])
+  members     MinistryMember[]
+  setlists    Setlist[]
+  events      EventLog[]
+}
+
+model MinistryMember {
+  id         String    @id @default(cuid())
+  ministryId String
+  userId     String
+  role       String    @default("MEMBER")
+  createdAt  DateTime  @default(now())
+
+  ministry   Ministry  @relation(fields: [ministryId], references: [id])
+  user       User      @relation(fields: [userId], references: [id])
+}
+
+model Song {
+  id             String     @id @default(cuid())
+  title          String
+  artist         String
+  liturgicalTags String
+  bpm            Int
+  key            String
+  timeSignature  String
+  language       String
+  season         String?
+  parts          String
+  createdAt      DateTime   @default(now())
+
+  arrangements   Arrangement[]
+}
+
+model Arrangement {
+  id            String    @id @default(cuid())
+  songId        String
+  name          String
+  defaultKey    String
+  defaultBpm    Int
+  structureJson String
+  stemsJson     String
+  audioDemoUrl  String
+  createdAt     DateTime  @default(now())
+
+  song          Song      @relation(fields: [songId], references: [id])
+  items         SetlistItem[]
+}
+
+model Setlist {
+  id          String        @id @default(cuid())
+  ministryId  String
+  name        String
+  date        DateTime?
+  liturgyType String?
+  season      String?
+  createdAt   DateTime      @default(now())
+  createdById String?
+
+  ministry    Ministry       @relation(fields: [ministryId], references: [id])
+  createdBy   User?          @relation("SetlistCreator", fields: [createdById], references: [id])
+  items       SetlistItem[]
+  events      EventLog[]
+}
+
+model SetlistItem {
+  id            String      @id @default(cuid())
+  setlistId     String
+  order         Int
+  part          String
+  arrangementId String
+  notes         String?
+  createdAt     DateTime    @default(now())
+
+  setlist       Setlist     @relation(fields: [setlistId], references: [id])
+  arrangement   Arrangement @relation(fields: [arrangementId], references: [id])
+}
+
+model EventLog {
+  id          String   @id @default(cuid())
+  userId      String
+  ministryId  String
+  setlistId   String
+  type        String
+  payloadJson String?
+  createdAt   DateTime @default(now())
+
+  user      User      @relation(fields: [userId], references: [id])
+  ministry  Ministry  @relation(fields: [ministryId], references: [id])
+  setlist   Setlist   @relation(fields: [setlistId], references: [id])
+}
