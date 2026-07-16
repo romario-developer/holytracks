@@ -1,56 +1,51 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { apiRequest } from "./lib/api";
+import Mixer from "./components/Mixer";
+import type { MixerStem, Section } from "./components/Mixer";
 
 type PartKey =
   | "ENTRADA"
   | "ATO_PENITENCIAL"
   | "GLORIA"
-  | "SALMO_RESPONSORIAL"
+  | "SALMO"
   | "ACLAMACAO"
   | "OFERTORIO"
   | "SANTO"
   | "CORDEIRO"
   | "COMUNHAO"
-  | "FINAL";
+  | "FINAL"
+  | "OUTROS";
 
-type Stem = {
+type Song = {
   id: string;
-  arrangement_id: string;
-  name: string;
-  volume: number;
-  label: string;
+  title: string;
+  artist: string;
+  bpm: number;
+  key?: string;
+  timeSignature: string;
+  language?: string;
+  liturgicalTags: string[];
+  parts: string[];
+  season?: string | null;
 };
 
 type Arrangement = {
   id: string;
-  tone: string;
-  bpm: number;
-  difficulty: number;
-  official: boolean;
-  demoUrl: string | null;
-  music: {
-    id: string;
-    title: string;
-    part: PartKey;
-    author: string | null;
-    tempoId: string;
-  };
-  stems: Stem[];
-};
-
-type Tempo = {
-  id: string;
   name: string;
-  slug: string;
-  description: string | null;
-  allowGloria: boolean;
+  defaultKey: string;
+  defaultBpm: number;
+  audioDemoUrl: string;
+  stemsJson: MixerStem[] | null;
+  structureJson: { duration?: number; beatsPerBar?: number; sections?: Section[] } | null;
+  song: Song | null;
 };
 
 type SetlistItem = {
   id: string;
   part: PartKey;
   order: number;
+  notes?: string | null;
   arrangement: Arrangement;
 };
 
@@ -58,16 +53,17 @@ type Setlist = {
   id: string;
   name: string;
   createdAt: string;
-  tempo: Tempo;
+  date?: string | null;
+  liturgyType?: string | null;
+  season?: string | null;
   ministryId: string;
-  createdBy: string;
   items: SetlistItem[];
 };
 
 type Ministry = {
   id: string;
   name: string;
-  slug: string;
+  slug?: string;
   owner_id?: string;
   role?: string;
 };
@@ -82,13 +78,32 @@ const PART_LABELS: Record<PartKey, string> = {
   ENTRADA: "Entrada",
   ATO_PENITENCIAL: "Ato Penitencial",
   GLORIA: "Glória",
-  SALMO_RESPONSORIAL: "Salmo",
+  SALMO: "Salmo",
   ACLAMACAO: "Aclamação",
   OFERTORIO: "Ofertório",
   SANTO: "Santo",
   CORDEIRO: "Cordeiro",
   COMUNHAO: "Comunhão",
-  FINAL: "Final"
+  FINAL: "Final",
+  OUTROS: "Outros"
+};
+
+// Cor de capa determinística a partir do título (não temos imagens ainda)
+const coverHue = (text: string) => {
+  let hash = 0;
+  for (let i = 0; i < text.length; i++) {
+    hash = (hash * 31 + text.charCodeAt(i)) | 0;
+  }
+  return Math.abs(hash) % 360;
+};
+
+const arrangementStems = (arrangement: Arrangement | null | undefined): MixerStem[] => {
+  if (!arrangement) return [];
+  if (arrangement.stemsJson?.length) return arrangement.stemsJson;
+  if (arrangement.audioDemoUrl) {
+    return [{ name: "Mix", label: "Mixagem completa", volume: 0.9, url: arrangement.audioDemoUrl }];
+  }
+  return [];
 };
 
 const useLocalStorage = <T,>(key: string, initialValue: T) => {
@@ -120,10 +135,8 @@ const App = () => {
   const [authError, setAuthError] = useState("");
   const [ministries, setMinistries] = useState<Ministry[]>([]);
   const [selectedMinistry, setSelectedMinistry] = useState<string>("");
-  const [tempos, setTempos] = useState<Tempo[]>([]);
   const [arrangements, setArrangements] = useState<Arrangement[]>([]);
   const [setlists, setSetlists] = useState<Setlist[]>([]);
-  const [draftTempoId, setDraftTempoId] = useState("");
   const [draftName, setDraftName] = useState("");
   const [draftItems, setDraftItems] = useState<SetlistItem[]>([]);
   const [builderPart, setBuilderPart] = useState<PartKey>("ENTRADA");
@@ -133,9 +146,6 @@ const App = () => {
   const [liveSetlistId, setLiveSetlistId] = useState<string | null>(null);
   const [liveIndex, setLiveIndex] = useState(0);
   const [liveLoop, setLiveLoop] = useState(false);
-  const [liveVolume, setLiveVolume] = useState(0.8);
-  const [livePlaying, setLivePlaying] = useState(false);
-  const audioRef = useRef<HTMLAudioElement>(null);
 
   const isAuthenticated = Boolean(token);
 
@@ -151,7 +161,6 @@ const App = () => {
       setMinistries([]);
       setSetlists([]);
       setArrangements([]);
-      setTempos([]);
       setSelectedMinistry("");
       return;
     }
@@ -174,11 +183,8 @@ const App = () => {
     if (!isAuthenticated) return;
     const loadLibrary = async () => {
       try {
-        const temposResponse = await apiRequest("/library/tempos", { token });
-        setTempos(temposResponse.tempos ?? []);
-        const arrangementsResponse = await apiRequest("/library/arrangements", { token });
-        setArrangements(arrangementsResponse.arrangements ?? []);
-        setDraftTempoId(temposResponse.tempos?.[0]?.id ?? "");
+        const response = await apiRequest("/arrangements", { token });
+        setArrangements(response.arrangements ?? []);
       } catch (error) {
         console.error(error);
       }
@@ -204,36 +210,8 @@ const App = () => {
     loadSetlists();
   }, [isAuthenticated, selectedMinistry, token]);
 
-  useEffect(() => {
-    const activeTrack = currentLiveItem?.arrangement?.demoUrl;
-    const audio = audioRef.current;
-    if (!audio) return;
-    if (activeTrack) {
-      const shouldResume = livePlaying;
-      audio.src = activeTrack;
-      audio.loop = liveLoop;
-      audio.volume = liveVolume;
-      if (shouldResume) {
-        audio.play().catch(() => {});
-      }
-    }
-
-    const handleEnd = () => {
-      if (liveLoop) return;
-      setLiveIndex((prev) => {
-        const next = prev + 1;
-        return next >= (activeLiveSetlist?.items.length ?? 1) ? prev : next;
-      });
-    };
-
-    audio.addEventListener("ended", handleEnd);
-    return () => {
-      audio.removeEventListener("ended", handleEnd);
-    };
-  }, [currentLiveItem, liveLoop, liveVolume, livePlaying, activeLiveSetlist]);
-
   const filteredArrangements = useMemo(
-    () => arrangements.filter((item) => item.music.part === builderPart),
+    () => arrangements.filter((item) => item.song?.parts?.includes(builderPart)),
     [arrangements, builderPart]
   );
 
@@ -268,8 +246,8 @@ const App = () => {
   };
 
   const handleAddToDraft = () => {
-    if (!builderArrangementId || !draftTempoId) {
-      setMessage("Escolha um arranjo e selecione o tempo litúrgico.");
+    if (!builderArrangementId) {
+      setMessage("Escolha um arranjo na biblioteca.");
       return;
     }
     const chosen = arrangements.find((item) => item.id === builderArrangementId);
@@ -292,15 +270,14 @@ const App = () => {
   };
 
   const handleSaveSetlist = async () => {
-    if (!draftName || !draftTempoId || !draftItems.length || !selectedMinistry) {
-      setMessage("Complete o nome, o tempo e adicione ao menos uma faixa.");
+    if (!draftName || !draftItems.length || !selectedMinistry) {
+      setMessage("Complete o nome e adicione ao menos uma faixa.");
       return;
     }
     try {
       const payload = {
         name: draftName,
         ministryId: selectedMinistry,
-        tempoId: draftTempoId,
         items: draftItems.map((item, index) => ({
           arrangementId: item.arrangement.id,
           part: item.part,
@@ -335,30 +312,25 @@ const App = () => {
     setLiveIndex((prev) => (prev + 1 >= activeLiveSetlist.items.length ? prev : prev + 1));
   };
 
+  const handleLivePrev = () => {
+    setLiveIndex((prev) => (prev - 1 < 0 ? prev : prev - 1));
+  };
+
+  const handleLiveEnded = () => {
+    setLiveIndex((prev) => {
+      const next = prev + 1;
+      return next >= (activeLiveSetlist?.items.length ?? 1) ? prev : next;
+    });
+  };
+
   const handleLiveSelection = (id: string) => {
     if (!id) {
       setLiveSetlistId(null);
       setLiveIndex(0);
-      setLivePlaying(false);
       return;
     }
     setLiveSetlistId(id);
     setLiveIndex(0);
-    setLivePlaying(false);
-  };
-
-  const handlePlayPause = () => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    if (livePlaying) {
-      audio.pause();
-      setLivePlaying(false);
-    } else {
-      audio
-        .play()
-        .then(() => setLivePlaying(true))
-        .catch(() => setMessage("Não foi possível reproduzir o áudio."));
-    }
   };
 
   const authPanel = (
@@ -382,7 +354,7 @@ const App = () => {
         </div>
         <AuthForm mode={authMode} onSubmit={handleAuth} loading={authLoading} error={authError} />
         <p className="small-print">
-          Em missas reais você pode trocar o tempo litúrgico, montar setlists e tocar no Live Mode.
+          Em missas reais você pode montar setlists e tocar os multitracks no Live Mode.
         </p>
       </div>
     </div>
@@ -396,7 +368,7 @@ const App = () => {
     <section className="panel">
       <header>
         <h2>Biblioteca litúrgica</h2>
-        <p>Repertório filtrado por parte e tempo.</p>
+        <p>Repertório filtrado por parte da missa.</p>
       </header>
       <div className="filters">
         <label>
@@ -409,33 +381,21 @@ const App = () => {
             ))}
           </select>
         </label>
-        <label>
-          Tempo
-          <select value={draftTempoId} onChange={(event) => setDraftTempoId(event.target.value)}>
-            <option value="">Selecione</option>
-            {tempos.map((tempo) => (
-              <option key={tempo.id} value={tempo.id}>
-                {tempo.name}
-              </option>
-            ))}
-          </select>
-        </label>
       </div>
       <div className="card-grid">
         {filteredArrangements.map((item) => (
           <div key={item.id} className="card">
             <div className="card-head">
-              <h3>{item.music.title}</h3>
-              <span>{item.music.part.replace("_", " ")}</span>
+              <h3>{item.song?.title ?? item.name}</h3>
+              <span>{item.song?.artist}</span>
             </div>
             <div className="card-body">
               <p>
-                Tom {item.tone} • {item.bpm} BPM
+                Tom {item.defaultKey} • {item.defaultBpm} BPM • {item.song?.timeSignature}
               </p>
-              <p>Dificuldade {item.difficulty}</p>
               <div className="stems">
-                {item.stems.slice(0, 3).map((stem) => (
-                  <div key={stem.id} className="stem">
+                {arrangementStems(item).map((stem) => (
+                  <div key={stem.url} className="stem">
                     <span>{stem.name}</span>
                     <span>{stem.label}</span>
                   </div>
@@ -447,6 +407,7 @@ const App = () => {
             </button>
           </div>
         ))}
+        {!filteredArrangements.length && <p>Nenhum arranjo cadastrado para esta parte.</p>}
       </div>
     </section>
   );
@@ -455,7 +416,7 @@ const App = () => {
     <section className="panel">
       <header>
         <h2>Resumo da missa</h2>
-        <p>Organize o ministério com tempos e setlists prontos.</p>
+        <p>Organize o ministério com setlists prontos.</p>
       </header>
       <div className="stats">
         <div>
@@ -488,18 +449,7 @@ const App = () => {
           Nome do setlist
           <input value={draftName} onChange={(event) => setDraftName(event.target.value)} />
         </label>
-        <label>
-          Tempo litúrgico
-          <select value={draftTempoId} onChange={(event) => setDraftTempoId(event.target.value)}>
-            <option value="">Escolha</option>
-            {tempos.map((tempo) => (
-              <option key={tempo.id} value={tempo.id}>
-                {tempo.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <button onClick={handleAddToDraft} disabled={!draftTempoId || !builderArrangementId}>
+        <button onClick={handleAddToDraft} disabled={!builderArrangementId}>
           Adicionar {PART_LABELS[builderPart]}
         </button>
       </div>
@@ -507,7 +457,7 @@ const App = () => {
         {draftItems.map((item) => (
           <article key={item.id} className="draft-row">
             <strong>
-              {PART_LABELS[item.part]} – {item.arrangement.music.title}
+              {PART_LABELS[item.part]} – {item.arrangement.song?.title ?? item.arrangement.name}
             </strong>
             <button onClick={() => handleRemoveDraft(item.id)}>Remover</button>
           </article>
@@ -525,7 +475,14 @@ const App = () => {
               <strong>{item.name}</strong>
               <span>{item.items.length} partes</span>
             </div>
-            <button onClick={() => handleLiveSelection(item.id)}>Carregar no Live</button>
+            <button
+              onClick={() => {
+                handleLiveSelection(item.id);
+                setActiveTab("live");
+              }}
+            >
+              Carregar no Live
+            </button>
           </article>
         ))}
       </div>
@@ -536,11 +493,7 @@ const App = () => {
     <section className="panel live-panel">
       <header>
         <h2>Live Mode</h2>
-        <p>Controle rápido da missa no palco.</p>
-      </header>
-      <div className="live-controls">
-        <label>
-          Setlist ativo
+        <label className="live-setlist-select">
           <select
             value={activeLiveSetlist?.id ?? ""}
             onChange={(event) => handleLiveSelection(event.target.value)}
@@ -552,42 +505,54 @@ const App = () => {
             ))}
           </select>
         </label>
-        <div className="audio-actions">
-          <button onClick={handlePlayPause}>{livePlaying ? "Pausar" : "Tocar"}</button>
-          <button onClick={handleLiveNext}>Próxima</button>
-          <label className="switch">
-            <input type="checkbox" checked={liveLoop} onChange={() => setLiveLoop((prev) => !prev)} />
-            <span>Loop</span>
-          </label>
-        </div>
-        <label>
-          Volume
-          <input
-            type="range"
-            min="0"
-            max="1"
-            step="0.05"
-            value={liveVolume}
-            onChange={(event) => {
-              setLiveVolume(Number(event.target.value));
-              if (audioRef.current) {
-                audioRef.current.volume = Number(event.target.value);
-              }
-            }}
-          />
-        </label>
+      </header>
+
+      <div className="song-cards">
+        {activeLiveSetlist?.items.map((item, index) => {
+          const songTitle = item.arrangement.song?.title ?? item.arrangement.name;
+          return (
+            <button
+              key={item.id}
+              className={`song-card${index === liveIndex ? " current" : ""}`}
+              onClick={() => setLiveIndex(index)}
+            >
+              <span
+                className="song-cover"
+                style={{
+                  background: `linear-gradient(160deg, hsl(${coverHue(songTitle)} 65% 42%), hsl(${
+                    (coverHue(songTitle) + 40) % 360
+                  } 70% 24%))`
+                }}
+              >
+                ♪
+              </span>
+              <span className="song-card-title">{songTitle}</span>
+              <span className="song-card-key">
+                {PART_LABELS[item.part]} ({item.arrangement.defaultKey})
+              </span>
+            </button>
+          );
+        })}
       </div>
-      <div className="live-timeline">
-        {activeLiveSetlist?.items.map((item, index) => (
-          <div key={item.id} className={index === liveIndex ? "current" : ""}>
-            <strong>
-              {PART_LABELS[item.part]} – {item.arrangement.music.title}
-            </strong>
-            <p>{item.arrangement.music.author ?? "Arranjo demo"}</p>
-          </div>
-        ))}
-      </div>
-      <audio ref={audioRef} controls className="hidden-audio" />
+
+      {currentLiveItem ? (
+        <Mixer
+          stems={arrangementStems(currentLiveItem.arrangement)}
+          title={currentLiveItem.arrangement.song?.title ?? currentLiveItem.arrangement.name}
+          tone={currentLiveItem.arrangement.defaultKey}
+          bpm={currentLiveItem.arrangement.defaultBpm}
+          timeSignature={currentLiveItem.arrangement.song?.timeSignature}
+          beatsPerBar={currentLiveItem.arrangement.structureJson?.beatsPerBar}
+          sections={currentLiveItem.arrangement.structureJson?.sections ?? []}
+          loop={liveLoop}
+          onToggleLoop={() => setLiveLoop((prev) => !prev)}
+          onEnded={handleLiveEnded}
+          onPrev={handleLivePrev}
+          onNext={handleLiveNext}
+        />
+      ) : (
+        <p className="mixer-empty">Carregue um setlist para começar.</p>
+      )}
     </section>
   );
 

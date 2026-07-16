@@ -1,5 +1,11 @@
 const API_BASE_URL = import.meta.env.VITE_API_URL ?? "http://localhost:4000/api";
 
+const API_ORIGIN = API_BASE_URL.replace(/\/api\/?$/, "");
+
+// Converte caminhos relativos de áudio ("/audio/...") para a origem da API
+export const resolveAudioUrl = (path: string) =>
+  path.startsWith("http") ? path : `${API_ORIGIN}${path}`;
+
 type RequestOptions = {
   method?: string;
   body?: Record<string, unknown>;

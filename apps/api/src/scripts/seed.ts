@@ -1,4 +1,6 @@
 import "dotenv/config";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { prisma } from "../lib/prisma.js";
 
 const songs = [
@@ -14,7 +16,7 @@ const songs = [
     parts: ["ENTRADA"],
     arrangement: {
       name: "Versao A",
-      audioDemoUrl: "/audio/track1.mp3"
+      trackSlug: "track1"
     }
   },
   {
@@ -29,7 +31,7 @@ const songs = [
     parts: ["SALMO"],
     arrangement: {
       name: "Padrao",
-      audioDemoUrl: "/audio/track2.mp3"
+      trackSlug: "track2"
     }
   },
   {
@@ -44,7 +46,7 @@ const songs = [
     parts: ["ACLAMACAO"],
     arrangement: {
       name: "Dinamica",
-      audioDemoUrl: "/audio/track3.mp3"
+      trackSlug: "track3"
     }
   },
   {
@@ -59,7 +61,7 @@ const songs = [
     parts: ["GLORIA"],
     arrangement: {
       name: "Pascal",
-      audioDemoUrl: "/audio/track4.mp3"
+      trackSlug: "track4"
     }
   },
   {
@@ -74,7 +76,7 @@ const songs = [
     parts: ["OFERTORIO"],
     arrangement: {
       name: "Instrumental",
-      audioDemoUrl: "/audio/track5.mp3"
+      trackSlug: "track5"
     }
   },
   {
@@ -89,7 +91,7 @@ const songs = [
     parts: ["SANTO"],
     arrangement: {
       name: "Liturgico",
-      audioDemoUrl: "/audio/track6.mp3"
+      trackSlug: "track6"
     }
   },
   {
@@ -104,7 +106,7 @@ const songs = [
     parts: ["CORDEIRO"],
     arrangement: {
       name: "Solo",
-      audioDemoUrl: "/audio/track7.mp3"
+      trackSlug: "track7"
     }
   },
   {
@@ -119,31 +121,51 @@ const songs = [
     parts: ["FINAL"],
     arrangement: {
       name: "Celebracao",
-      audioDemoUrl: "/audio/track8.mp3"
+      trackSlug: "track8"
     }
   }
 ];
 
-const structure = {
-  sections: [
-    { name: "Intro", duration: 12 },
-    { name: "Verso", duration: 32 },
-    { name: "Refrao", duration: 24 }
-  ]
-};
-
-const stems = [
-  { name: "Voz", label: "Solista", volume: 0.9 },
-  { name: "Violao", label: "Violao acustico", volume: 0.8 },
-  { name: "Teclado", label: "Pads e atmosferas", volume: 0.7 }
+// Stems sintéticos gerados por scripts/generate-stems.mjs em public/audio/<trackSlug>/
+const buildStems = (trackSlug: string) => [
+  { name: "Click", label: "Metronomo", volume: 0.8, url: `/audio/${trackSlug}/click.wav` },
+  { name: "Bateria", label: "Bateria e percussao", volume: 0.9, url: `/audio/${trackSlug}/bateria.wav` },
+  { name: "Baixo", label: "Baixo eletrico", volume: 0.8, url: `/audio/${trackSlug}/baixo.wav` },
+  { name: "Teclado", label: "Pads e atmosferas", volume: 0.7, url: `/audio/${trackSlug}/teclado.wav` },
+  { name: "Voz", label: "Voz guia", volume: 0.9, url: `/audio/${trackSlug}/voz.wav` }
 ];
+
+// O manifest.json de cada track traz os tempos exatos das seções (gerados junto com o áudio)
+const readManifest = (trackSlug: string) => {
+  const manifestPath = path.join(process.cwd(), "public", "audio", trackSlug, "manifest.json");
+  return JSON.parse(readFileSync(manifestPath, "utf-8"));
+};
 
 const run = async () => {
   for (const entry of songs) {
-    const existing = await prisma.song.findFirst({
-      where: { title: entry.title, artist: entry.artist }
+    const manifest = readManifest(entry.arrangement.trackSlug);
+    const stemsJson = JSON.stringify(buildStems(entry.arrangement.trackSlug));
+    const structureJson = JSON.stringify({
+      duration: manifest.duration,
+      beatsPerBar: manifest.beatsPerBar,
+      sections: manifest.sections
     });
-    if (existing) continue;
+    const audioDemoUrl = `/audio/${entry.arrangement.trackSlug}/mix.wav`;
+
+    const existing = await prisma.song.findFirst({
+      where: { title: entry.title, artist: entry.artist },
+      include: { arrangements: true }
+    });
+
+    if (existing) {
+      for (const arrangement of existing.arrangements) {
+        await prisma.arrangement.update({
+          where: { id: arrangement.id },
+          data: { audioDemoUrl, stemsJson, structureJson }
+        });
+      }
+      continue;
+    }
 
     const song = await prisma.song.create({
       data: {
@@ -165,9 +187,9 @@ const run = async () => {
         name: entry.arrangement.name,
         defaultKey: entry.key,
         defaultBpm: entry.bpm,
-        audioDemoUrl: entry.arrangement.audioDemoUrl,
-        stemsJson: JSON.stringify(stems),
-        structureJson: JSON.stringify(structure)
+        audioDemoUrl,
+        stemsJson,
+        structureJson
       }
     });
   }

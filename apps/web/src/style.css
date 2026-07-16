@@ -260,10 +260,388 @@ button {
   background: rgba(43, 110, 255, 0.2);
 }
 
-.hidden-audio {
-  width: 100%;
+/* ===== Player estilo console (inspirado no Playback) ===== */
+
+.mixer-status {
+  font-size: 0.8rem;
+  color: rgba(45, 212, 191, 0.9);
+  white-space: nowrap;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mixer-error {
+  color: #fca5a5;
+  font-size: 0.85rem;
+  margin: 0;
+}
+
+.mixer-empty {
+  margin: 1rem 0 0;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.player {
   margin-top: 1rem;
-  appearance: none;
+  background: #05070f;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 18px;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.player-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.player-meta {
+  display: flex;
+  gap: 1rem;
+}
+
+.meta-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 52px;
+}
+
+.meta-block strong {
+  font-size: 1.15rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.meta-block small {
+  font-size: 0.65rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.player-transport {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.transport-btn {
+  width: 2.6rem;
+  height: 2.6rem;
+  padding: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  font-size: 0.95rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.transport-btn.play {
+  width: 3.2rem;
+  height: 3.2rem;
+  background: linear-gradient(135deg, #2dd4bf, #0ea5e9);
+  border: none;
+  font-size: 1.15rem;
+}
+
+.player-side {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.chip {
+  padding: 0.35rem 0.9rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.chip.active {
+  background: rgba(14, 165, 233, 0.4);
+  border-color: #0ea5e9;
+}
+
+.chip.active.repeat {
+  background: rgba(234, 179, 8, 0.35);
+  border-color: #eab308;
+}
+
+.transpose-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.transpose-controls button {
+  width: 1.6rem;
+  height: 1.6rem;
+  padding: 0;
+  border-radius: 8px;
+  font-size: 1rem;
+  line-height: 1;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.transpose-controls button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.transpose-controls strong {
+  min-width: 2ch;
+  text-align: center;
+}
+
+.cue-route {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.65);
+}
+
+.cue-route select {
+  flex: 0 1 320px;
+  padding: 0.4rem 0.6rem;
+  font-size: 0.85rem;
+}
+
+/* Forma de onda */
+.waveform {
+  position: relative;
+  height: 110px;
+  border-radius: 12px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.03);
+  cursor: pointer;
+}
+
+.waveform canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.wave-played {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: rgba(45, 212, 191, 0.16);
+  pointer-events: none;
+}
+
+.wave-playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: #2dd4bf;
+  box-shadow: 0 0 8px rgba(45, 212, 191, 0.8);
+  pointer-events: none;
+}
+
+.wave-section-line {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: rgba(255, 255, 255, 0.25);
+  pointer-events: none;
+}
+
+/* Seções (Intro, Verso, Refrão, Solo) */
+.sections-row {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.section-chip {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1rem;
+  padding: 0.5rem 0.4rem;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 0.85rem;
+}
+
+.section-chip small {
+  font-size: 0.65rem;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.section-chip.current {
+  background: rgba(14, 165, 233, 0.35);
+  border-color: #0ea5e9;
+}
+
+.section-chip.queued {
+  border-color: #eab308;
+  animation: queued-pulse 1s ease-in-out infinite;
+}
+
+@keyframes queued-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(234, 179, 8, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 0 5px rgba(234, 179, 8, 0.12);
+  }
+}
+
+.queue-hint {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #eab308;
+}
+
+/* Console de faders verticais */
+.console {
+  display: flex;
+  gap: 0.35rem;
+  overflow-x: auto;
+  padding: 0.85rem 0.5rem 0.6rem;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 14px;
+}
+
+.strip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 62px;
+  padding: 0.4rem 0.2rem;
+  border-radius: 10px;
+  transition: opacity 0.15s ease;
+}
+
+.strip.silenced {
+  opacity: 0.4;
+}
+
+.master-strip {
+  border-left: 1px solid rgba(255, 255, 255, 0.12);
+  margin-left: 0.35rem;
+}
+
+.fader {
+  writing-mode: vertical-lr;
+  direction: rtl;
+  width: 1.5rem;
+  height: 130px;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  border: none;
+  accent-color: #38bdf8;
+  cursor: pointer;
+}
+
+.strip-buttons {
+  display: flex;
+  gap: 0.3rem;
+  min-height: 1.7rem;
+}
+
+.strip-buttons button {
+  width: 1.7rem;
+  height: 1.7rem;
+  padding: 0;
+  border-radius: 6px;
+  font-size: 0.72rem;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.strip-buttons .mute.active {
+  background: #dc2626;
+  border-color: #dc2626;
+}
+
+.strip-buttons .solo.active {
+  background: #eab308;
+  border-color: #eab308;
+  color: #1c1917;
+}
+
+.strip-name {
+  font-size: 0.72rem;
+  color: rgba(255, 255, 255, 0.75);
+  max-width: 62px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Cards das músicas do setlist */
+.song-cards {
+  display: flex;
+  gap: 0.7rem;
+  overflow-x: auto;
+  padding: 0.85rem 0.15rem 0.5rem;
+}
+
+.song-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 92px;
+  padding: 0.5rem;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid transparent;
+  font-weight: 400;
+}
+
+.song-card.current {
+  border-color: #0ea5e9;
+  background: rgba(14, 165, 233, 0.12);
+}
+
+.song-cover {
+  width: 64px;
+  height: 64px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.song-card-title {
+  font-size: 0.75rem;
+  max-width: 92px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.song-card-key {
+  font-size: 0.65rem;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.live-setlist-select select {
+  min-width: 180px;
 }
 
 .tab-bar {

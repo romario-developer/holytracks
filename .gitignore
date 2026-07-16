@@ -5,3 +5,10 @@ apps/*/.turbo/
 .env
 *.sqlite
 apps/api/dev.db
+*.db-journal
+
+# Prisma client gerado (npm run prisma:generate)
+apps/api/src/generated/
+
+# Áudios sintéticos gerados (node scripts/generate-stems.mjs + generate-guides.ps1)
+apps/api/public/audio/

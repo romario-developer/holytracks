@@ -108,6 +108,18 @@ export async function libraryRoutes(app: FastifyInstance) {
     };
   });
 
+  app.get("/arrangements", async () => {
+    const arrangements = await prisma.arrangement.findMany({
+      include: { song: true }
+    });
+    return {
+      arrangements: arrangements.map((arrangement) => ({
+        ...formatArrangementDetail(arrangement),
+        song: formatSongResponse(arrangement.song)
+      }))
+    };
+  });
+
   app.get("/arrangements/:id", async (request, reply) => {
     const { id } = request.params as { id: string };
     const arrangement = await prisma.arrangement.findUnique({

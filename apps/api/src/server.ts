@@ -1,3 +1,4 @@
+import "dotenv/config";
 import path from "node:path";
 import Fastify from "fastify";
 import fastifyCors from "@fastify/cors";
@@ -13,10 +14,16 @@ const app = Fastify({ logger: false });
 app.register(fastifyCors, { origin: true });
 
 app.register(fastifyStatic, {
-  root: path.join(process.cwd(), "public"),
+  root: path.join(process.cwd(), "public", "audio"),
   prefix: "/audio/",
   decorateReply: false
 });
+
+app.get("/", async () => ({
+  name: "Holytracks API",
+  status: "ok",
+  hint: "Esta é a API. O app roda em http://localhost:4173 (npm run dev:web)."
+}));
 
 app.get("/api/health", async () => ({ status: "ok" }));
 
@@ -26,14 +33,11 @@ app.register(libraryRoutes, { prefix: "/api" });
 app.register(setlistRoutes, { prefix: "/api" });
 
 const start = async () => {
-  try {
-    await app.listen({ port: Number(process.env.PORT ?? 4000), host: "0.0.0.0" });
-  } finally {
-    await prisma.$disconnect();
-  }
+  await app.listen({ port: Number(process.env.PORT ?? 4000), host: "0.0.0.0" });
+  console.log(`API rodando em http://localhost:${process.env.PORT ?? 4000}`);
 };
 
 start().catch((error) => {
-  app.log.error(error);
-  process.exit(1);
+  console.error(error);
+  prisma.$disconnect().finally(() => process.exit(1));
 });

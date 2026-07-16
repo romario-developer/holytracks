@@ -8,7 +8,8 @@ import { requireAuth, AuthenticatedRequest } from "../lib/middleware.js";
 const registerSchema = z.object({
   email: z.string().email(),
   password: z.string().min(6),
-  name: z.string().min(2)
+  name: z.string().min(2),
+  ministryName: z.string().min(3).optional()
 });
 
 const loginSchema = z.object({
@@ -23,7 +24,7 @@ export async function authRoutes(app: FastifyInstance) {
       return reply.status(400).send({ errors: parsed.error.issues });
     }
 
-    const { email, password, name } = parsed.data;
+    const { email, password, name, ministryName } = parsed.data;
     const existing = await prisma.user.findUnique({ where: { email } });
     if (existing) {
       return reply.status(409).send({ message: "Email already registered" });
@@ -36,7 +37,7 @@ export async function authRoutes(app: FastifyInstance) {
 
     const ministry = await prisma.ministry.create({
       data: {
-        name: `${name} Ministerio`,
+        name: ministryName?.trim() || `${name} Ministerio`,
         ownerUserId: user.id,
         members: {
           create: { userId: user.id, role: "OWNER" }

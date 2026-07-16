@@ -41,10 +41,12 @@ export async function ministryRoutes(app: FastifyInstance) {
         where: { userId: authReq.userId },
         include: { ministry: true }
       });
-      return memberships.map((item) => ({
-        ministry: item.ministry,
-        role: item.role
-      }));
+      return {
+        ministries: memberships.map((item) => ({
+          ...item.ministry,
+          role: item.role
+        }))
+      };
     });
 
     router.post("/ministries/:id/invite", async (request, reply) => {
