@@ -2,16 +2,22 @@ import "dotenv/config";
 import path from "node:path";
 import Fastify from "fastify";
 import fastifyCors from "@fastify/cors";
+import fastifyMultipart from "@fastify/multipart";
 import fastifyStatic from "@fastify/static";
 import { authRoutes } from "./routes/auth.js";
 import { ministryRoutes } from "./routes/ministries.js";
 import { libraryRoutes } from "./routes/library.js";
 import { setlistRoutes } from "./routes/setlists.js";
+import { adminRoutes } from "./routes/admin.js";
 import { prisma } from "./lib/prisma.js";
 
 const app = Fastify({ logger: false });
 
-app.register(fastifyCors, { origin: true });
+app.register(fastifyCors, {
+  origin: true,
+  methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"]
+});
+app.register(fastifyMultipart);
 
 app.register(fastifyStatic, {
   root: path.join(process.cwd(), "public", "audio"),
@@ -31,6 +37,7 @@ app.register(authRoutes, { prefix: "/api" });
 app.register(ministryRoutes, { prefix: "/api" });
 app.register(libraryRoutes, { prefix: "/api" });
 app.register(setlistRoutes, { prefix: "/api" });
+app.register(adminRoutes, { prefix: "/api" });
 
 const start = async () => {
   await app.listen({ port: Number(process.env.PORT ?? 4000), host: "0.0.0.0" });

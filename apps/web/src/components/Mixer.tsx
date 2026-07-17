@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { resolveAudioUrl } from "../lib/api";
+import { getAudioContext, loadBuffer } from "../lib/audioCache";
 import { pitchShiftBuffer, transposeKey } from "../lib/pitchShift";
 
 export type MixerStem = {
@@ -56,34 +57,6 @@ type MixerProps = {
   onEnded?: () => void;
   onPrev?: () => void;
   onNext?: () => void;
-};
-
-// AudioContext único compartilhado entre trocas de música
-let sharedContext: AudioContext | null = null;
-const getAudioContext = () => {
-  if (!sharedContext) {
-    sharedContext = new AudioContext();
-  }
-  return sharedContext;
-};
-
-const bufferCache = new Map<string, Promise<AudioBuffer>>();
-
-const loadBuffer = (url: string) => {
-  let cached = bufferCache.get(url);
-  if (!cached) {
-    cached = fetch(url)
-      .then((response) => {
-        if (!response.ok) {
-          throw new Error(`Falha ao baixar stem (${response.status})`);
-        }
-        return response.arrayBuffer();
-      })
-      .then((data) => getAudioContext().decodeAudioData(data));
-    bufferCache.set(url, cached);
-    cached.catch(() => bufferCache.delete(url));
-  }
-  return cached;
 };
 
 const formatTime = (seconds: number) => {

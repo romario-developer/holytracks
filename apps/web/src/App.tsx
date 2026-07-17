@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { apiRequest } from "./lib/api";
 import Mixer from "./components/Mixer";
 import type { MixerStem, Section } from "./components/Mixer";
+import AdminPanel from "./components/AdminPanel";
 
 type PartKey =
   | "ENTRADA"
@@ -141,7 +142,7 @@ const App = () => {
   const [draftItems, setDraftItems] = useState<SetlistItem[]>([]);
   const [builderPart, setBuilderPart] = useState<PartKey>("ENTRADA");
   const [builderArrangementId, setBuilderArrangementId] = useState("");
-  const [activeTab, setActiveTab] = useState<"home" | "library" | "setlist" | "live">("home");
+  const [activeTab, setActiveTab] = useState<"home" | "library" | "setlist" | "live" | "admin">("home");
   const [message, setMessage] = useState("");
   const [liveSetlistId, setLiveSetlistId] = useState<string | null>(null);
   const [liveIndex, setLiveIndex] = useState(0);
@@ -179,19 +180,20 @@ const App = () => {
     loadMinistries();
   }, [isAuthenticated, token]);
 
+  const loadLibrary = useCallback(async () => {
+    if (!token) return;
+    try {
+      const response = await apiRequest("/arrangements", { token });
+      setArrangements(response.arrangements ?? []);
+    } catch (error) {
+      console.error(error);
+    }
+  }, [token]);
+
   useEffect(() => {
     if (!isAuthenticated) return;
-    const loadLibrary = async () => {
-      try {
-        const response = await apiRequest("/arrangements", { token });
-        setArrangements(response.arrangements ?? []);
-      } catch (error) {
-        console.error(error);
-      }
-    };
-
     loadLibrary();
-  }, [isAuthenticated, token]);
+  }, [isAuthenticated, loadLibrary]);
 
   useEffect(() => {
     if (!isAuthenticated || !selectedMinistry) return;
@@ -577,11 +579,25 @@ const App = () => {
           </button>
         </div>
       </header>
+      {message && activeTab !== "home" && (
+        <div className="toast" onClick={() => setMessage("")} role="status">
+          {message}
+        </div>
+      )}
       <main className="app-main">
         {activeTab === "home" && homePanel}
         {activeTab === "library" && libraryPanel}
         {activeTab === "setlist" && setlistPanel}
         {activeTab === "live" && livePanel}
+        {activeTab === "admin" && (
+          <AdminPanel
+            token={token}
+            arrangements={arrangements}
+            partLabels={PART_LABELS}
+            onChanged={loadLibrary}
+            onMessage={setMessage}
+          />
+        )}
       </main>
       <footer className="tab-bar">
         <button className={activeTab === "home" ? "active" : ""} onClick={() => setActiveTab("home")}>
@@ -601,6 +617,9 @@ const App = () => {
         </button>
         <button className={activeTab === "live" ? "active" : ""} onClick={() => setActiveTab("live")}>
           Live
+        </button>
+        <button className={activeTab === "admin" ? "active" : ""} onClick={() => setActiveTab("admin")}>
+          Admin
         </button>
       </footer>
     </div>

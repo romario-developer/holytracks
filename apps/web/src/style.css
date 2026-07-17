@@ -418,6 +418,144 @@ button {
   font-size: 0.85rem;
 }
 
+/* ===== Painel Admin ===== */
+.admin-form {
+  margin-top: 1rem;
+}
+
+.admin-form h3,
+.admin-manage h3 {
+  margin: 0 0 0.5rem;
+}
+
+.admin-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0.75rem;
+}
+
+.admin-grid label,
+.admin-manage > label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.admin-manage {
+  margin-top: 1.5rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 1rem;
+}
+
+.stem-upload {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  align-items: center;
+}
+
+.stem-upload input[type="file"] {
+  flex: 1 1 220px;
+}
+
+.stem-list {
+  margin-top: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.section-editor {
+  margin-top: 1.25rem;
+}
+
+.section-editor h4 {
+  margin: 0 0 0.25rem;
+}
+
+.waveform.editor {
+  cursor: crosshair;
+}
+
+.wave-section-line.selected {
+  background: #eab308;
+  width: 3px;
+}
+
+.section-rows {
+  margin-top: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.section-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  padding: 0.4rem 0.6rem;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  cursor: pointer;
+}
+
+.section-row.selected {
+  border-color: #eab308;
+  background: rgba(234, 179, 8, 0.1);
+}
+
+.section-row input:first-child {
+  flex: 1;
+}
+
+.section-row input[type="number"] {
+  width: 90px;
+}
+
+.section-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+
+.section-actions .inline {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.section-actions .inline input {
+  width: 70px;
+}
+
+.section-actions .primary {
+  width: auto;
+  margin-top: 0;
+}
+
+.ghost.danger {
+  margin-top: 1.25rem;
+  border-color: rgba(220, 38, 38, 0.6);
+  color: #fca5a5;
+}
+
+.toast {
+  margin: 0.75rem 1rem 0;
+  padding: 0.6rem 0.9rem;
+  border-radius: 12px;
+  background: rgba(14, 165, 233, 0.15);
+  border: 1px solid rgba(14, 165, 233, 0.4);
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
 /* Forma de onda */
 .waveform {
   position: relative;
@@ -646,7 +784,7 @@ button {
 
 .tab-bar {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 0.25rem;
   padding: 0.5rem;
   background: rgba(2, 5, 18, 0.95);
