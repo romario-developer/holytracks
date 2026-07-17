@@ -142,7 +142,7 @@ const App = () => {
   const [draftItems, setDraftItems] = useState<SetlistItem[]>([]);
   const [builderPart, setBuilderPart] = useState<PartKey>("ENTRADA");
   const [builderArrangementId, setBuilderArrangementId] = useState("");
-  const [activeTab, setActiveTab] = useState<"home" | "library" | "setlist" | "live" | "admin">("home");
+  const [overlay, setOverlay] = useState<null | "setlist" | "admin" | "config">(null);
   const [message, setMessage] = useState("");
   const [liveSetlistId, setLiveSetlistId] = useState<string | null>(null);
   const [liveIndex, setLiveIndex] = useState(0);
@@ -294,6 +294,10 @@ const App = () => {
       setSetlists((prev) => [response.setlist, ...prev]);
       setDraftItems([]);
       setDraftName("");
+      // já deixa o setlist recém-criado ativo no palco
+      if (response.setlist?.id) {
+        handleLiveSelection(response.setlist.id);
+      }
       setMessage("Setlist salvo com sucesso!");
     } catch (error) {
       setMessage((error as Error).message);
@@ -366,262 +370,247 @@ const App = () => {
     return <div className="app-shell">{authPanel}</div>;
   }
 
-  const libraryPanel = (
+  const setlistManager = (
     <section className="panel">
       <header>
-        <h2>Biblioteca litúrgica</h2>
-        <p>Repertório filtrado por parte da missa.</p>
+        <h2>Setlists</h2>
+        <p>Escolha o setlist ativo ou monte um novo para a missa.</p>
       </header>
-      <div className="filters">
-        <label>
-          Parte
-          <select value={builderPart} onChange={(event) => setBuilderPart(event.target.value as PartKey)}>
-            {Object.entries(PART_LABELS).map(([key, label]) => (
-              <option key={key} value={key}>
-                {label}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
-      <div className="card-grid">
-        {filteredArrangements.map((item) => (
-          <div key={item.id} className="card">
-            <div className="card-head">
-              <h3>{item.song?.title ?? item.name}</h3>
-              <span>{item.song?.artist}</span>
-            </div>
-            <div className="card-body">
-              <p>
-                Tom {item.defaultKey} • {item.defaultBpm} BPM • {item.song?.timeSignature}
-              </p>
-              <div className="stems">
-                {arrangementStems(item).map((stem) => (
-                  <div key={stem.url} className="stem">
-                    <span>{stem.name}</span>
-                    <span>{stem.label}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <button className="ghost" onClick={() => setBuilderArrangementId(item.id)}>
-              {builderArrangementId === item.id ? "Selecionado" : "Selecionar"}
-            </button>
-          </div>
-        ))}
-        {!filteredArrangements.length && <p>Nenhum arranjo cadastrado para esta parte.</p>}
-      </div>
-    </section>
-  );
 
-  const homePanel = (
-    <section className="panel">
-      <header>
-        <h2>Resumo da missa</h2>
-        <p>Organize o ministério com setlists prontos.</p>
-      </header>
-      <div className="stats">
-        <div>
-          <h3>{setlists.length}</h3>
-          <p>Setlists salvos</p>
-        </div>
-        <div>
-          <h3>{arrangements.length}</h3>
-          <p>Arranjos disponíveis</p>
-        </div>
-        <div>
-          <h3>{draftItems.length}</h3>
-          <p>Itens no rascunho</p>
-        </div>
-      </div>
-      <div className="notice">
-        {message ? <p>{message}</p> : <p>Selecione um ministério para começar a montar a missa.</p>}
-      </div>
-    </section>
-  );
-
-  const setlistPanel = (
-    <section className="panel">
-      <header>
-        <h2>Montagem de setlist</h2>
-        <p>Combine partes da missa e organize a ordem.</p>
-      </header>
-      <div className="draft-controls">
-        <label>
-          Nome do setlist
-          <input value={draftName} onChange={(event) => setDraftName(event.target.value)} />
-        </label>
-        <button onClick={handleAddToDraft} disabled={!builderArrangementId}>
-          Adicionar {PART_LABELS[builderPart]}
-        </button>
-      </div>
-      <div className="draft-items">
-        {draftItems.map((item) => (
-          <article key={item.id} className="draft-row">
-            <strong>
-              {PART_LABELS[item.part]} – {item.arrangement.song?.title ?? item.arrangement.name}
-            </strong>
-            <button onClick={() => handleRemoveDraft(item.id)}>Remover</button>
-          </article>
-        ))}
-        {!draftItems.length && <p>Adicione um arranjo para cada parte da missa.</p>}
-      </div>
-      <button className="primary" onClick={handleSaveSetlist}>
-        Salvar setlist
-      </button>
       <div className="stored-setlists">
-        <h3>Setlists do ministério</h3>
         {setlists.map((item) => (
-          <article key={item.id} className="data-row">
+          <article
+            key={item.id}
+            className={`data-row${item.id === activeLiveSetlist?.id ? " active" : ""}`}
+          >
             <div>
               <strong>{item.name}</strong>
               <span>{item.items.length} partes</span>
             </div>
             <button
+              className="primary"
               onClick={() => {
                 handleLiveSelection(item.id);
-                setActiveTab("live");
+                setOverlay(null);
               }}
             >
-              Carregar no Live
+              Tocar
             </button>
           </article>
         ))}
-      </div>
-    </section>
-  );
-
-  const livePanel = (
-    <section className="panel live-panel">
-      <header>
-        <h2>Live Mode</h2>
-        <label className="live-setlist-select">
-          <select
-            value={activeLiveSetlist?.id ?? ""}
-            onChange={(event) => handleLiveSelection(event.target.value)}
-          >
-            {setlists.map((setlist) => (
-              <option key={setlist.id} value={setlist.id}>
-                {setlist.name}
-              </option>
-            ))}
-          </select>
-        </label>
-      </header>
-
-      <div className="song-cards">
-        {activeLiveSetlist?.items.map((item, index) => {
-          const songTitle = item.arrangement.song?.title ?? item.arrangement.name;
-          return (
-            <button
-              key={item.id}
-              className={`song-card${index === liveIndex ? " current" : ""}`}
-              onClick={() => setLiveIndex(index)}
-            >
-              <span
-                className="song-cover"
-                style={{
-                  background: `linear-gradient(160deg, hsl(${coverHue(songTitle)} 65% 42%), hsl(${
-                    (coverHue(songTitle) + 40) % 360
-                  } 70% 24%))`
-                }}
-              >
-                ♪
-              </span>
-              <span className="song-card-title">{songTitle}</span>
-              <span className="song-card-key">
-                {PART_LABELS[item.part]} ({item.arrangement.defaultKey})
-              </span>
-            </button>
-          );
-        })}
+        {!setlists.length && <p>Nenhum setlist ainda. Monte um abaixo.</p>}
       </div>
 
-      {currentLiveItem ? (
-        <Mixer
-          stems={arrangementStems(currentLiveItem.arrangement)}
-          title={currentLiveItem.arrangement.song?.title ?? currentLiveItem.arrangement.name}
-          tone={currentLiveItem.arrangement.defaultKey}
-          bpm={currentLiveItem.arrangement.defaultBpm}
-          timeSignature={currentLiveItem.arrangement.song?.timeSignature}
-          beatsPerBar={currentLiveItem.arrangement.structureJson?.beatsPerBar}
-          sections={currentLiveItem.arrangement.structureJson?.sections ?? []}
-          loop={liveLoop}
-          onToggleLoop={() => setLiveLoop((prev) => !prev)}
-          onEnded={handleLiveEnded}
-          onPrev={handleLivePrev}
-          onNext={handleLiveNext}
-        />
-      ) : (
-        <p className="mixer-empty">Carregue um setlist para começar.</p>
-      )}
-    </section>
-  );
-
-  return (
-    <div className="app-shell">
-      <header className="app-header">
-        <div>
-          <h1>Holytracks Multitracks</h1>
-          <p>{ministries.find((item) => item.id === selectedMinistry)?.name ?? "Selecione um ministério"}</p>
-          {user && <p className="muted">Coordenador(a): {user.name}</p>}
-        </div>
-        <div className="user-actions">
-          <select value={selectedMinistry} onChange={(event) => setSelectedMinistry(event.target.value)}>
-            {ministries.map((ministry) => (
-              <option key={ministry.id} value={ministry.id}>
-                {ministry.name}
-              </option>
-            ))}
-          </select>
-          <button className="ghost" onClick={handleLogout}>
-            Sair
+      <div className="builder">
+        <h3>Novo setlist</h3>
+        <div className="draft-controls">
+          <label>
+            Nome do setlist
+            <input value={draftName} onChange={(event) => setDraftName(event.target.value)} />
+          </label>
+          <label>
+            Parte
+            <select value={builderPart} onChange={(event) => setBuilderPart(event.target.value as PartKey)}>
+              {Object.entries(PART_LABELS).map(([key, label]) => (
+                <option key={key} value={key}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button onClick={handleAddToDraft} disabled={!builderArrangementId}>
+            Adicionar {PART_LABELS[builderPart]}
           </button>
         </div>
+
+        <div className="card-grid">
+          {filteredArrangements.map((item) => (
+            <button
+              key={item.id}
+              className={`card selectable${builderArrangementId === item.id ? " selected" : ""}`}
+              onClick={() => setBuilderArrangementId(item.id)}
+            >
+              <div className="card-head">
+                <h3>{item.song?.title ?? item.name}</h3>
+                <span>{item.song?.artist}</span>
+              </div>
+              <p className="card-meta">
+                Tom {item.defaultKey} • {item.defaultBpm} BPM • {arrangementStems(item).length} stems
+              </p>
+            </button>
+          ))}
+          {!filteredArrangements.length && <p>Nenhuma música cadastrada para esta parte.</p>}
+        </div>
+
+        {draftItems.length > 0 && (
+          <div className="draft-items">
+            {draftItems.map((item) => (
+              <article key={item.id} className="draft-row">
+                <strong>
+                  {PART_LABELS[item.part]} – {item.arrangement.song?.title ?? item.arrangement.name}
+                </strong>
+                <button onClick={() => handleRemoveDraft(item.id)}>Remover</button>
+              </article>
+            ))}
+          </div>
+        )}
+        <button className="primary" onClick={handleSaveSetlist} disabled={!draftItems.length || !draftName}>
+          Salvar setlist
+        </button>
+      </div>
+    </section>
+  );
+
+  const configPanel = (
+    <section className="panel">
+      <header>
+        <h2>Configurações</h2>
+        <p>{user ? `Logado como ${user.name}` : ""}</p>
       </header>
-      {message && activeTab !== "home" && (
+      <label className="config-field">
+        Ministério
+        <select value={selectedMinistry} onChange={(event) => setSelectedMinistry(event.target.value)}>
+          {ministries.map((ministry) => (
+            <option key={ministry.id} value={ministry.id}>
+              {ministry.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <button className="ghost danger" onClick={handleLogout}>
+        Sair da conta
+      </button>
+    </section>
+  );
+
+  const overlayTitles = { setlist: "Setlists", admin: "Administração", config: "Configurações" };
+
+  return (
+    <div className="stage-shell">
+      <div className="stage-body">
+        <section className="stage-player">
+          <div className="stage-topbar">
+            <span className="brand">Holytracks</span>
+            <label className="setlist-pill">
+              <select
+                value={activeLiveSetlist?.id ?? ""}
+                onChange={(event) => handleLiveSelection(event.target.value)}
+              >
+                {!setlists.length && <option value="">Nenhum setlist</option>}
+                {setlists.map((setlist) => (
+                  <option key={setlist.id} value={setlist.id}>
+                    {setlist.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          {activeLiveSetlist?.items.length ? (
+            <div className="song-cards">
+              {activeLiveSetlist.items.map((item, index) => {
+                const songTitle = item.arrangement.song?.title ?? item.arrangement.name;
+                return (
+                  <button
+                    key={item.id}
+                    className={`song-card${index === liveIndex ? " current" : ""}`}
+                    onClick={() => setLiveIndex(index)}
+                  >
+                    <span
+                      className="song-cover"
+                      style={{
+                        background: `linear-gradient(160deg, hsl(${coverHue(songTitle)} 65% 42%), hsl(${
+                          (coverHue(songTitle) + 40) % 360
+                        } 70% 24%))`
+                      }}
+                    >
+                      ♪
+                    </span>
+                    <span className="song-card-title">{songTitle}</span>
+                    <span className="song-card-key">
+                      {PART_LABELS[item.part]} ({item.arrangement.defaultKey})
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
+
+          {currentLiveItem ? (
+            <Mixer
+              stems={arrangementStems(currentLiveItem.arrangement)}
+              title={currentLiveItem.arrangement.song?.title ?? currentLiveItem.arrangement.name}
+              tone={currentLiveItem.arrangement.defaultKey}
+              bpm={currentLiveItem.arrangement.defaultBpm}
+              timeSignature={currentLiveItem.arrangement.song?.timeSignature}
+              beatsPerBar={currentLiveItem.arrangement.structureJson?.beatsPerBar}
+              sections={currentLiveItem.arrangement.structureJson?.sections ?? []}
+              loop={liveLoop}
+              onToggleLoop={() => setLiveLoop((prev) => !prev)}
+              onEnded={handleLiveEnded}
+              onPrev={handleLivePrev}
+              onNext={handleLiveNext}
+            />
+          ) : (
+            <div className="stage-empty">
+              <p>Nenhuma música carregada.</p>
+              <button className="primary" onClick={() => setOverlay("setlist")}>
+                Escolher setlist
+              </button>
+              <button className="ghost" onClick={() => setOverlay("admin")}>
+                Cadastrar músicas
+              </button>
+            </div>
+          )}
+        </section>
+
+        <aside className="stage-sidebar">
+          <button onClick={() => setOverlay("setlist")}>
+            <span className="side-icon">≣</span>
+            Setlist
+          </button>
+          <button onClick={() => setOverlay("admin")}>
+            <span className="side-icon">🎚</span>
+            Admin
+          </button>
+          <button onClick={() => setOverlay("config")}>
+            <span className="side-icon">⚙</span>
+            Config
+          </button>
+        </aside>
+      </div>
+
+      {message && (
         <div className="toast" onClick={() => setMessage("")} role="status">
           {message}
         </div>
       )}
-      <main className="app-main">
-        {activeTab === "home" && homePanel}
-        {activeTab === "library" && libraryPanel}
-        {activeTab === "setlist" && setlistPanel}
-        {activeTab === "live" && livePanel}
-        {activeTab === "admin" && (
-          <AdminPanel
-            token={token}
-            arrangements={arrangements}
-            partLabels={PART_LABELS}
-            onChanged={loadLibrary}
-            onMessage={setMessage}
-          />
-        )}
-      </main>
-      <footer className="tab-bar">
-        <button className={activeTab === "home" ? "active" : ""} onClick={() => setActiveTab("home")}>
-          Início
-        </button>
-        <button
-          className={activeTab === "library" ? "active" : ""}
-          onClick={() => setActiveTab("library")}
-        >
-          Biblioteca
-        </button>
-        <button
-          className={activeTab === "setlist" ? "active" : ""}
-          onClick={() => setActiveTab("setlist")}
-        >
-          Setlist
-        </button>
-        <button className={activeTab === "live" ? "active" : ""} onClick={() => setActiveTab("live")}>
-          Live
-        </button>
-        <button className={activeTab === "admin" ? "active" : ""} onClick={() => setActiveTab("admin")}>
-          Admin
-        </button>
-      </footer>
+
+      {overlay && (
+        <div className="overlay-backdrop" onClick={() => setOverlay(null)}>
+          <div className="overlay-panel" onClick={(event) => event.stopPropagation()}>
+            <div className="overlay-head">
+              <strong>{overlayTitles[overlay]}</strong>
+              <button className="overlay-close" onClick={() => setOverlay(null)}>
+                ✕
+              </button>
+            </div>
+            <div className="overlay-scroll">
+              {overlay === "setlist" && setlistManager}
+              {overlay === "config" && configPanel}
+              {overlay === "admin" && (
+                <AdminPanel
+                  token={token}
+                  arrangements={arrangements}
+                  partLabels={PART_LABELS}
+                  onChanged={loadLibrary}
+                  onMessage={setMessage}
+                />
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
