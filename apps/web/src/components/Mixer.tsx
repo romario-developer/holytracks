@@ -146,6 +146,8 @@ const Mixer = ({
   const [transposing, setTransposing] = useState(false);
   const [cueDevices, setCueDevices] = useState<MediaDeviceInfo[]>([]);
   const [cueOutputId, setCueOutputId] = useState("default");
+  // "stereo": tudo normal | "monoSplit": VS somado no canal L, click+guia no R
+  const [cueMode, setCueMode] = useState<"stereo" | "monoSplit">("stereo");
 
   // buffers como vieram dos arquivos; buffersRef recebe a versão transposta quando transpose != 0
   const originalBuffersRef = useRef<AudioBuffer[]>([]);
@@ -156,6 +158,9 @@ const Mixer = ({
   // Barramento de cue (click + guias de voz): separado do master e roteável
   // para outra saída de áudio (fones dos músicos) sem passar pelo PA
   const cueBusRef = useRef<GainNode | null>(null);
+  const cuePanRef = useRef<StereoPannerNode | null>(null);
+  const masterPanRef = useRef<StereoPannerNode | null>(null);
+  const cueModeRef = useRef<"stereo" | "monoSplit">("stereo");
   const cueStreamDestRef = useRef<MediaStreamAudioDestinationNode | null>(null);
   const cueAudioElRef = useRef<HTMLAudioElement | null>(null);
   const startedAtRef = useRef(0);
@@ -190,7 +195,10 @@ const Mixer = ({
     const ctx = getAudioContext();
     if (!cueBusRef.current) {
       cueBusRef.current = ctx.createGain();
-      cueBusRef.current.connect(ctx.destination);
+      cuePanRef.current = ctx.createStereoPanner();
+      cuePanRef.current.pan.value = cueModeRef.current === "monoSplit" ? 1 : 0;
+      cueBusRef.current.connect(cuePanRef.current);
+      cuePanRef.current.connect(ctx.destination);
     }
     return cueBusRef.current;
   }, []);
@@ -218,11 +226,12 @@ const Mixer = ({
   const applyCueOutput = useCallback(
     async (deviceId: string) => {
       const ctx = getAudioContext();
-      const cueBus = getCueBus();
+      getCueBus();
+      const cuePan = cuePanRef.current as StereoPannerNode;
       try {
         if (deviceId === "default") {
-          cueBus.disconnect();
-          cueBus.connect(ctx.destination);
+          cuePan.disconnect();
+          cuePan.connect(ctx.destination);
           cueAudioElRef.current?.pause();
         } else {
           if (!cueStreamDestRef.current) {
@@ -233,15 +242,15 @@ const Mixer = ({
             cueAudioElRef.current.srcObject = cueStreamDestRef.current.stream;
           }
           await cueAudioElRef.current.setSinkId(deviceId);
-          cueBus.disconnect();
-          cueBus.connect(cueStreamDestRef.current);
+          cuePan.disconnect();
+          cuePan.connect(cueStreamDestRef.current);
           await cueAudioElRef.current.play();
         }
         setCueOutputId(deviceId);
       } catch (routeError) {
         console.error(routeError);
-        cueBus.disconnect();
-        cueBus.connect(ctx.destination);
+        cuePan.disconnect();
+        cuePan.connect(ctx.destination);
         setCueOutputId("default");
       }
     },
@@ -382,9 +391,14 @@ const Mixer = ({
 
       if (!masterGainRef.current) {
         masterGainRef.current = ctx.createGain();
-        masterGainRef.current.connect(ctx.destination);
+        masterPanRef.current = ctx.createStereoPanner();
+        masterGainRef.current.connect(masterPanRef.current);
+        masterPanRef.current.connect(ctx.destination);
       }
       masterGainRef.current.gain.value = masterVolume;
+      if (masterPanRef.current) {
+        masterPanRef.current.pan.value = cueModeRef.current === "monoSplit" ? -1 : 0;
+      }
       const cueBus = getCueBus();
 
       const currentChannels = channelsRef.current;
@@ -758,10 +772,26 @@ const Mixer = ({
     }
   }, [masterVolume]);
 
-  // Lista inicial de saídas (sem pedir permissão; nomes vêm ao abrir o seletor)
+  // Lista inicial de saídas + atualização automática quando a placa é (des)conectada
   useEffect(() => {
     loadCueDevices(false);
+    const handleChange = () => loadCueDevices(false);
+    navigator.mediaDevices?.addEventListener?.("devicechange", handleChange);
+    return () => navigator.mediaDevices?.removeEventListener?.("devicechange", handleChange);
   }, [loadCueDevices]);
+
+  // Modo de distribuição: "monoSplit" manda o VS somado no canal esquerdo
+  // e o cue (click + guias) no direito — o padrão clássico com saída estéreo única
+  useEffect(() => {
+    cueModeRef.current = cueMode;
+    getCueBus();
+    if (cuePanRef.current) {
+      cuePanRef.current.pan.value = cueMode === "monoSplit" ? 1 : 0;
+    }
+    if (masterPanRef.current) {
+      masterPanRef.current.pan.value = cueMode === "monoSplit" ? -1 : 0;
+    }
+  }, [cueMode, getCueBus]);
 
   const handlePlayPause = () => {
     if (playingRef.current) {
@@ -1015,11 +1045,7 @@ const Mixer = ({
         <span>🎧 Saída do click e guias</span>
         <select
           value={cueOutputId}
-          onMouseDown={() => {
-            if (!cueDevices.some((device) => device.label)) {
-              loadCueDevices(true);
-            }
-          }}
+          onMouseDown={() => loadCueDevices(!cueDevices.some((device) => device.label))}
           onChange={(event) => applyCueOutput(event.target.value)}
         >
           <option value="default">Padrão (junto com o PA)</option>
@@ -1030,6 +1056,14 @@ const Mixer = ({
                 {device.label || "Saída de áudio"}
               </option>
             ))}
+        </select>
+        <select
+          value={cueMode}
+          onChange={(event) => setCueMode(event.target.value as "stereo" | "monoSplit")}
+          title="Como distribuir VS e click na saída"
+        >
+          <option value="stereo">Estéreo normal</option>
+          <option value="monoSplit">VS no L • Click+Guia no R</option>
         </select>
       </div>
     </div>
