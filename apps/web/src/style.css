@@ -129,6 +129,14 @@ input {
   font-size: 0.95rem;
 }
 
+/* A lista aberta do select usa o fundo do sistema (branco) — força fundo escuro
+   e texto claro para as opções não ficarem branco no branco */
+select option,
+select optgroup {
+  background: #0b1020;
+  color: #f8fbff;
+}
+
 .card-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
