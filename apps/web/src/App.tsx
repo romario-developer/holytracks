@@ -541,9 +541,11 @@ const App = () => {
                     >
                       ♪
                     </span>
-                    <span className="song-card-title">{songTitle}</span>
-                    <span className="song-card-key">
-                      {PART_LABELS[item.part]} ({item.arrangement.defaultKey})
+                    <span className="song-card-meta">
+                      <span className="song-card-title">{songTitle}</span>
+                      <span className="song-card-key">
+                        {PART_LABELS[item.part]} ({item.arrangement.defaultKey})
+                      </span>
                     </span>
                   </button>
                 );

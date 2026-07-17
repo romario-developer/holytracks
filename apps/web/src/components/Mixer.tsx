@@ -180,6 +180,7 @@ const Mixer = ({
   const [cueOutputId, setCueOutputId] = useState("default");
   // "stereo": tudo normal | "monoSplit": VS somado no canal L, click+guia no R
   const [cueMode, setCueMode] = useState<"stereo" | "monoSplit">("stereo");
+  const [showCueSettings, setShowCueSettings] = useState(false);
 
   // buffers como vieram dos arquivos; buffersRef recebe a versão transposta quando transpose != 0
   const originalBuffersRef = useRef<AudioBuffer[]>([]);
@@ -967,6 +968,13 @@ const Mixer = ({
           <button className={loop ? "chip active" : "chip"} onClick={onToggleLoop}>
             Loop
           </button>
+          <button
+            className={showCueSettings ? "chip active" : "chip"}
+            onClick={() => setShowCueSettings((prev) => !prev)}
+            title="Saída do click e guias"
+          >
+            🎧
+          </button>
           <span className="mixer-status">
             {loading ? "Carregando..." : transposing ? "Transpondo..." : countingIn ? "Contagem..." : title}
           </span>
@@ -1062,6 +1070,7 @@ const Mixer = ({
         })}
       </div>
 
+      {showCueSettings && (
       <div className="cue-route">
         <span>🎧 Saída do click e guias</span>
         <select
@@ -1087,6 +1096,7 @@ const Mixer = ({
           <option value="monoSplit">VS no L • Click+Guia no R</option>
         </select>
       </div>
+      )}
     </div>
   );
 };
