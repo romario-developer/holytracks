@@ -62,6 +62,7 @@ const AdminPanel = ({ token, arrangements, partLabels, onChanged, onMessage }: A
   const [sections, setSections] = useState<EditableSection[]>([]);
   const [selectedSection, setSelectedSection] = useState(0);
   const [beatsPerBar, setBeatsPerBar] = useState(4);
+  const [snapMode, setSnapMode] = useState<"bar" | "beat" | "off">("beat");
   const [duration, setDuration] = useState(0);
   const [savingSections, setSavingSections] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -95,12 +96,16 @@ const AdminPanel = ({ token, arrangements, partLabels, onChanged, onMessage }: A
       const g = canvas.getContext("2d");
       if (!g) return;
       const W = (canvas.width = 1200);
-      const H = (canvas.height = 90);
+      const H = (canvas.height = 120);
+      const RULER = 26; // faixa da régua compasso.tempo, estilo Reaper
       g.clearRect(0, 0, W, H);
+
+      // waveform (abaixo da régua)
       const datas = buffers.map((buffer) => buffer.getChannelData(0));
       const maxLen = Math.max(...datas.map((data) => data.length));
       const samplesPerCol = Math.max(1, Math.floor(maxLen / W));
-      const mid = H / 2;
+      const mid = RULER + (H - RULER) / 2;
+      const amp = (H - RULER) / 2;
       g.fillStyle = "rgba(125, 170, 255, 0.7)";
       for (let x = 0; x < W; x++) {
         const start = x * samplesPerCol;
@@ -115,12 +120,49 @@ const AdminPanel = ({ token, arrangements, partLabels, onChanged, onMessage }: A
           if (sum > max) max = sum;
           if (sum < min) min = sum;
         }
-        g.fillRect(x, mid - max * mid * 0.95, 1, Math.max(1, (max - min) * mid * 0.95));
+        g.fillRect(x, mid - max * amp * 0.95, 1, Math.max(1, (max - min) * amp * 0.95));
+      }
+
+      // grade de compassos/tempos alinhada ao click (BPM do arranjo)
+      const bpm = selected?.defaultBpm ?? 0;
+      if (bpm > 0) {
+        const beatSec = 60 / bpm;
+        const barSec = beatSec * beatsPerBar;
+        const pxPerSec = W / total;
+        const barPx = barSec * pxPerSec;
+        const labelEvery = barPx > 52 ? 1 : barPx > 26 ? 2 : 4;
+
+        g.fillStyle = "rgba(255, 255, 255, 0.05)";
+        g.fillRect(0, 0, W, RULER);
+
+        for (let bar = 0; bar * barSec < total; bar++) {
+          const x = Math.round(bar * barSec * pxPerSec);
+          // linha de compasso: altura inteira
+          g.fillStyle = "rgba(255, 255, 255, 0.28)";
+          g.fillRect(x, 0, 1, H);
+          // linhas de tempo (batidas do click) dentro do compasso
+          if (barPx / beatsPerBar > 7) {
+            for (let beat = 1; beat < beatsPerBar; beat++) {
+              const bx = Math.round((bar * barSec + beat * beatSec) * pxPerSec);
+              g.fillStyle = "rgba(255, 255, 255, 0.1)";
+              g.fillRect(bx, RULER, 1, H - RULER);
+            }
+          }
+          if (bar % labelEvery === 0) {
+            const t = bar * barSec;
+            g.fillStyle = "rgba(255, 255, 255, 0.85)";
+            g.font = "11px Inter, system-ui, sans-serif";
+            g.fillText(`${bar + 1}.1`, x + 3, 11);
+            g.fillStyle = "rgba(255, 255, 255, 0.45)";
+            g.font = "9px Inter, system-ui, sans-serif";
+            g.fillText(`${Math.floor(t / 60)}:${(t % 60).toFixed(3).padStart(6, "0")}`, x + 3, 22);
+          }
+        }
       }
     } catch {
       onMessage("Não foi possível carregar o áudio para a waveform.");
     }
-  }, [stems, onMessage]);
+  }, [stems, onMessage, selected?.defaultBpm, beatsPerBar]);
 
   useEffect(() => {
     drawWaveform();
@@ -208,7 +250,16 @@ const AdminPanel = ({ token, arrangements, partLabels, onChanged, onMessage }: A
     if (!duration || !sections.length) return;
     const rect = (waveWrapRef.current as HTMLDivElement).getBoundingClientRect();
     const ratio = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width));
-    const time = Math.round(ratio * duration * 10) / 10;
+    let time = ratio * duration;
+
+    // ímã: gruda o clique na grade do click (compasso ou tempo)
+    const bpm = selected?.defaultBpm ?? 0;
+    if (snapMode !== "off" && bpm > 0) {
+      const step = snapMode === "bar" ? (60 / bpm) * beatsPerBar : 60 / bpm;
+      time = Math.round(time / step) * step;
+    }
+    time = Math.max(0, Math.min(duration, Math.round(time * 1000) / 1000));
+
     setSections((prev) =>
       prev.map((section, index) => (index === selectedSection ? { ...section, start: time } : section))
     );
@@ -368,8 +419,22 @@ const AdminPanel = ({ token, arrangements, partLabels, onChanged, onMessage }: A
               <div className="section-editor">
                 <h4>Seções</h4>
                 <p className="muted">
-                  Selecione uma seção e clique na waveform para marcar onde ela começa.
+                  Selecione uma seção e clique na waveform para marcar onde ela começa — o clique
+                  gruda na grade do click ({selected.defaultBpm} BPM).
                 </p>
+                <div className="editor-toolbar">
+                  <label className="inline">
+                    Ímã
+                    <select
+                      value={snapMode}
+                      onChange={(e) => setSnapMode(e.target.value as "bar" | "beat" | "off")}
+                    >
+                      <option value="beat">Tempo (click)</option>
+                      <option value="bar">Compasso</option>
+                      <option value="off">Desligado</option>
+                    </select>
+                  </label>
+                </div>
                 <div className="waveform editor" ref={waveWrapRef} onClick={handleWaveClick}>
                   <canvas ref={canvasRef} />
                   {duration > 0 &&
