@@ -313,6 +313,21 @@ const App = () => {
     setMessage("Sessão encerrada.");
   };
 
+  // Sessão expirada (401 na API): limpa tudo e volta ao login
+  useEffect(() => {
+    const onUnauthorized = () => {
+      setToken("");
+      setUser(null);
+      setMinistries([]);
+      setSelectedMinistry("");
+      setSetlists([]);
+      setOverlay(null);
+      setAuthError("Sua sessão expirou. Entre novamente.");
+    };
+    window.addEventListener("holytracks-unauthorized", onUnauthorized);
+    return () => window.removeEventListener("holytracks-unauthorized", onUnauthorized);
+  }, [setToken, setUser]);
+
   const handleLiveNext = () => {
     if (!activeLiveSetlist) return;
     setLiveIndex((prev) => (prev + 1 >= activeLiveSetlist.items.length ? prev : prev + 1));

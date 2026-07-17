@@ -89,6 +89,65 @@ const createTickBuffer = (ctx: AudioContext, accented: boolean) => {
   return buffer;
 };
 
+// Cor da faixa no console, no espírito do Prime: master/verde, click+guia/vermelho,
+// instrumentos em azul (tom variando pelo nome para diferenciar as trilhas)
+const stemColor = (name: string, isMaster = false) => {
+  if (isMaster) return "#2dd4bf";
+  const lower = name.toLowerCase();
+  if (lower.includes("click") || lower.includes("cue") || lower.includes("guia")) return "#f43f5e";
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) | 0;
+  const hue = 195 + (Math.abs(hash) % 40); // faixa de azuis/cianos
+  return `hsl(${hue} 85% 55%)`;
+};
+
+// Fader vertical "gordo" estilo Prime: barra preenchida de baixo pra cima,
+// arrastável com o dedo (pointer events) — funciona em celular e tablet
+type FaderProps = {
+  value: number;
+  color: string;
+  dimmed?: boolean;
+  onChange: (value: number) => void;
+};
+
+const VerticalFader = ({ value, color, dimmed, onChange }: FaderProps) => {
+  const ref = useRef<HTMLDivElement>(null);
+
+  const setFromClientY = (clientY: number) => {
+    const el = ref.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const ratio = 1 - (clientY - rect.top) / rect.height;
+    onChange(Math.max(0, Math.min(1, Math.round(ratio * 100) / 100)));
+  };
+
+  return (
+    <div
+      className={`vfader${dimmed ? " dimmed" : ""}`}
+      ref={ref}
+      onPointerDown={(event) => {
+        try {
+          event.currentTarget.setPointerCapture(event.pointerId);
+        } catch {
+          // pointer sintético/sem captura — segue sem travar o arraste
+        }
+        setFromClientY(event.clientY);
+      }}
+      onPointerMove={(event) => {
+        if (event.buttons) setFromClientY(event.clientY);
+      }}
+      role="slider"
+      aria-valuenow={Math.round(value * 100)}
+      aria-valuemin={0}
+      aria-valuemax={100}
+    >
+      <div className="vfader-fill" style={{ height: `${value * 100}%`, background: color }}>
+        <span className="vfader-knob" />
+      </div>
+    </div>
+  );
+};
+
 const Mixer = ({
   stems,
   title,
@@ -961,21 +1020,26 @@ const Mixer = ({
       )}
 
       <div className="console">
+        <div className="strip master-strip">
+          <span className="strip-name">Master</span>
+          <VerticalFader value={masterVolume} color={stemColor("", true)} onChange={setMasterVolume} />
+          <div className="strip-buttons placeholder" />
+        </div>
         {stems.map((stem, index) => {
           const channel = channels[index];
           if (!channel) return null;
           const anySolo = channels.some((item) => item.solo);
           const silenced = channel.muted || (anySolo && !channel.solo);
           return (
-            <div key={stem.url} className={`strip${silenced ? " silenced" : ""}`}>
-              <input
-                className="fader"
-                type="range"
-                min={0}
-                max={1}
-                step={0.02}
+            <div key={stem.url} className="strip">
+              <span className="strip-name" title={stem.label}>
+                {stem.name}
+              </span>
+              <VerticalFader
                 value={channel.volume}
-                onChange={(event) => updateChannel(index, { volume: Number(event.target.value) })}
+                color={stemColor(stem.name)}
+                dimmed={silenced}
+                onChange={(value) => updateChannel(index, { volume: value })}
               />
               <div className="strip-buttons">
                 <button
@@ -993,25 +1057,9 @@ const Mixer = ({
                   S
                 </button>
               </div>
-              <span className="strip-name" title={stem.label}>
-                {stem.name}
-              </span>
             </div>
           );
         })}
-        <div className="strip master-strip">
-          <input
-            className="fader"
-            type="range"
-            min={0}
-            max={1}
-            step={0.02}
-            value={masterVolume}
-            onChange={(event) => setMasterVolume(Number(event.target.value))}
-          />
-          <div className="strip-buttons" />
-          <span className="strip-name">Master</span>
-        </div>
       </div>
 
       <div className="cue-route">

@@ -6,6 +6,13 @@ const API_ORIGIN = API_BASE_URL.replace(/\/api\/?$/, "");
 export const resolveAudioUrl = (path: string) =>
   path.startsWith("http") ? path : `${API_ORIGIN}${path}`;
 
+// Sessão expirada (401): avisa o App para deslogar e voltar ao login
+const notifyUnauthorized = () => {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("holytracks-unauthorized"));
+  }
+};
+
 type RequestOptions = {
   method?: string;
   body?: Record<string, unknown>;
@@ -23,6 +30,7 @@ export const apiUpload = async (path: string, file: File, token: string) => {
   });
   const responseData = await response.json().catch(() => null);
   if (!response.ok) {
+    if (response.status === 401) notifyUnauthorized();
     throw new Error(responseData?.message ?? "Erro ao enviar o arquivo");
   }
   return responseData;
@@ -46,6 +54,7 @@ export const apiRequest = async (path: string, options: RequestOptions = {}) => 
 
   const responseData = await response.json().catch(() => null);
   if (!response.ok) {
+    if (response.status === 401) notifyUnauthorized();
     throw new Error(responseData?.message ?? "Erro ao conectar com o servidor");
   }
 
